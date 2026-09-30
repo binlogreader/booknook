@@ -33,12 +33,10 @@ use anyhow::{Context, Result};
 use ::epub::doc::EpubDoc;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
 
 use crate::markdown::{Heading, Parsed, RenderLine};
-use crate::theme::Theme;
+use crate::text::{Ink, Span, Style};
 
 pub(crate) fn is_epub(path: &Path) -> bool {
     matches!(path.extension().and_then(|ext| ext.to_str()), Some(ext) if ext.eq_ignore_ascii_case("epub"))
@@ -62,7 +60,7 @@ pub(crate) struct Book {
 /// printed volume. Chapters that fail to decode are skipped rather than
 /// failing the whole book; losing one damaged chapter is better than
 /// refusing to open the other forty.
-pub(crate) fn load(path: &Path, theme: &Theme) -> Result<Book> {
+pub(crate) fn load(path: &Path) -> Result<Book> {
     let mut doc = EpubDoc::new(path)
         .with_context(|| format!("could not open {} as an EPUB", path.display()))?;
     let title = doc.get_title();
@@ -92,7 +90,7 @@ pub(crate) fn load(path: &Path, theme: &Theme) -> Result<Book> {
         if let Some(path) = resource_path {
             chapter_starts.push((path, blocks.len()));
         }
-        render_xhtml(&chapter, theme, &mut blocks, &mut headings);
+        render_xhtml(&chapter, &mut blocks, &mut headings);
     }
 
     // A whole book that yielded almost no headings did not really yield a
@@ -172,14 +170,14 @@ enum ListKind {
 /// and a flush whenever a block ends. XHTML inside an EPUB is required to be
 /// well-formed XML, which is what makes an XML parser sufficient where
 /// general HTML would need a real HTML parser.
-fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headings: &mut Vec<Heading>) {
+fn render_xhtml(input: &str, blocks: &mut Vec<RenderLine>, headings: &mut Vec<Heading>) {
     let mut reader = Reader::from_str(input);
     // Books converted from other formats are not always perfectly nested.
     // Checking end-tag names would make one stray tag abort the chapter;
     // without it, the walk just keeps going.
     reader.config_mut().check_end_names = false;
 
-    let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut spans: Vec<Span> = Vec::new();
     let mut style_stack: Vec<Style> = Vec::new();
     let mut style = Style::default();
     let mut list_stack: Vec<ListKind> = Vec::new();
@@ -202,7 +200,7 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
                     "head" | "style" | "script" | "title" => skip_depth += 1,
                     "p" | "div" if quote_depth > 0 && name == "p" => {
                         flush(blocks, &mut spans);
-                        spans.push(Span::styled("┃ ".to_string(), Style::default().fg(theme.muted)));
+                        spans.push(Span::styled("┃ ", Style::default().rule()));
                         hang = 2;
                     }
                     "p" => flush(blocks, &mut spans),
@@ -211,23 +209,25 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
                         blocks.push(RenderLine::Gap);
                         heading_level = name[1..].parse::<u8>().ok();
                         style_stack.push(style);
-                        style = style.fg(theme.heading).add_modifier(Modifier::BOLD);
+                        style = style.heading(heading_level.unwrap_or(1));
                     }
                     "em" | "i" | "cite" | "dfn" => {
                         style_stack.push(style);
-                        style = style.add_modifier(Modifier::ITALIC);
+                        style = style.italic();
                     }
                     "strong" | "b" => {
                         style_stack.push(style);
-                        style = style.add_modifier(Modifier::BOLD);
+                        style = style.bold();
                     }
                     "a" => {
                         style_stack.push(style);
-                        style = style.fg(theme.link).add_modifier(Modifier::UNDERLINED);
+                        style = style.ink(Ink::Link).underlined();
                     }
                     "code" | "tt" | "kbd" | "samp" => {
                         style_stack.push(style);
-                        style = style.fg(theme.code).add_modifier(Modifier::DIM);
+                        // Tinted paper rather than colored words, matching
+                        // markdown's inline code.
+                        style = style.code();
                     }
                     // Calibre and its kin encode italics and bold as classed
                     // spans instead of semantic tags. The class attribute is
@@ -236,17 +236,17 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
                         style_stack.push(style);
                         let class = attr(&e, "class").unwrap_or_default();
                         if class.contains("italic") || class.contains("oblique") {
-                            style = style.add_modifier(Modifier::ITALIC);
+                            style = style.italic();
                         }
                         if class.contains("bold") {
-                            style = style.add_modifier(Modifier::BOLD);
+                            style = style.bold();
                         }
                     }
                     "blockquote" => {
                         flush(blocks, &mut spans);
                         quote_depth += 1;
                         style_stack.push(style);
-                        style = style.fg(theme.quote).add_modifier(Modifier::ITALIC);
+                        style = style.ink(Ink::Quote).italic();
                     }
                     "ul" => list_stack.push(ListKind::Bullet),
                     "ol" => list_stack.push(ListKind::Ordered(1)),
@@ -264,7 +264,7 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
                         };
                         indent = nesting;
                         hang = nesting + UnicodeWidthStr::width(marker.as_str()) as u16;
-                        spans.push(Span::styled(marker, Style::default().fg(theme.muted)));
+                        spans.push(Span::styled(marker, Style::default().ink(Ink::Muted)));
                     }
                     "pre" => {
                         flush(blocks, &mut spans);
@@ -289,7 +289,7 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
                     }
                     "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
                         if let Some(level) = heading_level.take() {
-                            let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+                            let text: String = spans.iter().map(|s| s.content.as_str()).collect();
                             let text = normalize_whitespace(&text);
                             if !text.is_empty() {
                                 headings.push(Heading { level, text, block: blocks.len() });
@@ -338,15 +338,15 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
                         flush(blocks, &mut spans);
                         blocks.push(RenderLine::Gap);
                         blocks.push(RenderLine::Prose {
-                            spans: vec![Span::styled("· · ·".to_string(), Style::default().fg(theme.muted))],
+                            spans: vec![Span::styled("· · ·", Style::default().ink(Ink::Muted))],
                             indent: 0,
                             hang: 0,
                         });
                         blocks.push(RenderLine::Gap);
                     }
-                    // Terminals do not draw pictures. The alt text, when the
-                    // book bothered to write one, is the readable residue of
-                    // the image; a bare marker otherwise, so a figure does
+                    // booknook does not draw pictures yet. The alt text, when
+                    // the book bothered to write one, is the readable residue
+                    // of the image; a bare marker otherwise, so a figure does
                     // not vanish without a trace.
                     "img" | "image" => {
                         flush(blocks, &mut spans);
@@ -355,10 +355,7 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
                             None => "[image]".to_string(),
                         };
                         blocks.push(RenderLine::Prose {
-                            spans: vec![Span::styled(
-                                label,
-                                Style::default().fg(theme.muted).add_modifier(Modifier::ITALIC),
-                            )],
+                            spans: vec![Span::styled(label, Style::default().ink(Ink::Muted).italic())],
                             indent: 0,
                             hang: 0,
                         });
@@ -376,10 +373,10 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
                         // fenced code does.
                         for line in text.split('\n') {
                             if !line.trim().is_empty() {
-                                blocks.push(RenderLine::Verbatim(ratatui::text::Line::from(Span::styled(
+                                blocks.push(RenderLine::Verbatim(Span::styled(
                                     format!("  {line}"),
-                                    Style::default().fg(theme.code),
-                                ))));
+                                    Style::default().code(),
+                                )));
                             }
                         }
                     } else if !text.is_empty() {
@@ -406,7 +403,7 @@ fn render_xhtml(input: &str, theme: &Theme, blocks: &mut Vec<RenderLine>, headin
 }
 
 /// Flush collected spans as a plain prose block with no indent.
-fn flush(blocks: &mut Vec<RenderLine>, spans: &mut Vec<Span<'static>>) {
+fn flush(blocks: &mut Vec<RenderLine>, spans: &mut Vec<Span>) {
     flush_block(blocks, spans, 0, 0, false);
 }
 
@@ -414,7 +411,7 @@ fn flush(blocks: &mut Vec<RenderLine>, spans: &mut Vec<Span<'static>>) {
 /// XHTML is full of whitespace-only text nodes between tags; a block made of
 /// nothing but those would render as a stray blank line, so they are dropped
 /// here rather than filtered by every caller.
-fn flush_block(blocks: &mut Vec<RenderLine>, spans: &mut Vec<Span<'static>>, indent: u16, hang: u16, in_pre: bool) {
+fn flush_block(blocks: &mut Vec<RenderLine>, spans: &mut Vec<Span>, indent: u16, hang: u16, in_pre: bool) {
     if in_pre {
         // Preformatted text was already pushed as verbatim rows on arrival.
         spans.clear();
@@ -558,12 +555,11 @@ fn resolve_entity(name: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::THEMES;
 
     fn convert(xhtml: &str) -> Parsed {
         let mut blocks = Vec::new();
         let mut headings = Vec::new();
-        render_xhtml(xhtml, &THEMES[0], &mut blocks, &mut headings);
+        render_xhtml(xhtml, &mut blocks, &mut headings);
         Parsed { blocks, headings }
     }
 
@@ -573,7 +569,7 @@ mod tests {
             .iter()
             .filter_map(|b| match b {
                 RenderLine::Prose { spans, .. } => {
-                    Some(normalize_whitespace(&spans.iter().map(|s| s.content.as_ref()).collect::<String>()))
+                    Some(normalize_whitespace(&spans.iter().map(|s| s.content.as_str()).collect::<String>()))
                 }
                 _ => None,
             })
@@ -610,9 +606,9 @@ mod tests {
         let RenderLine::Prose { spans, .. } = &parsed.blocks[0] else {
             panic!("expected prose");
         };
-        let styled = spans.iter().find(|s| s.content.as_ref() == "Seeing Anew").expect("span text");
-        assert!(styled.style.add_modifier.contains(Modifier::ITALIC));
-        assert!(styled.style.add_modifier.contains(Modifier::BOLD));
+        let styled = spans.iter().find(|s| s.content.as_str() == "Seeing Anew").expect("span text");
+        assert!(styled.style.italic);
+        assert!(styled.style.bold);
     }
 
     #[test]
@@ -621,10 +617,10 @@ mod tests {
         let RenderLine::Prose { spans, .. } = &parsed.blocks[0] else {
             panic!("expected prose");
         };
-        let em = spans.iter().find(|s| s.content.as_ref() == "slanted").unwrap();
-        let strong = spans.iter().find(|s| s.content.as_ref() == "heavy").unwrap();
-        assert!(em.style.add_modifier.contains(Modifier::ITALIC));
-        assert!(strong.style.add_modifier.contains(Modifier::BOLD));
+        let em = spans.iter().find(|s| s.content.as_str() == "slanted").unwrap();
+        let strong = spans.iter().find(|s| s.content.as_str() == "heavy").unwrap();
+        assert!(em.style.italic);
+        assert!(strong.style.bold);
     }
 
     #[test]
@@ -665,7 +661,7 @@ mod tests {
         let Some(path) = std::env::var_os("BOOKNOOK_EPUB") else {
             return;
         };
-        let book = load(Path::new(&path), &THEMES[0]).expect("book should open");
+        let book = load(Path::new(&path)).expect("book should open");
         println!("title: {:?}", book.title);
         println!("blocks: {}", book.parsed.blocks.len());
         println!("headings: {}", book.parsed.headings.len());

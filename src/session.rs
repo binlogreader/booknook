@@ -1,6 +1,6 @@
 //! Remembering where you left off, the way an e-reader does.
 //!
-//! This module knows nothing about an `App` or a terminal. It only knows how
+//! This module knows nothing about an `App` or a window. It only knows how
 //! to read and write a small file that records the last document opened, the
 //! page reached in every document seen so far, and the typographic settings
 //! in force. `app` reads a `Session` at startup to restore all of that, and
@@ -36,6 +36,8 @@ pub(crate) struct Session {
     pub(crate) theme_index: usize,
     /// Whether page turns are animated. Stored as `0` or `1` in the file.
     pub(crate) animate: bool,
+    /// The window's zoom factor, which is how text size is set.
+    pub(crate) zoom: f32,
     /// The page reached in each document, keyed by its path. This is what
     /// makes returning to any file land on the page it was left on.
     pub(crate) positions: HashMap<PathBuf, u16>,
@@ -44,9 +46,9 @@ pub(crate) struct Session {
 impl Default for Session {
     /// The settings a first-time run starts with, before any state file
     /// exists. These match `App::new` so that a fresh install and a restored
-    /// one behave the same. Line spacing defaults to zero: on a terminal
-    /// grid, a single-spaced paragraph is the closest thing to book leading,
-    /// and the paragraph gap alone carries the document's structure.
+    /// one behave the same. Line spacing defaults to its first step, which
+    /// is already book leading, and the paragraph gap carries the
+    /// document's structure.
     fn default() -> Self {
         Session {
             last_file: None,
@@ -55,6 +57,7 @@ impl Default for Session {
             para: 1,
             theme_index: 0,
             animate: false,
+            zoom: 1.0,
             positions: HashMap::new(),
         }
     }
@@ -108,6 +111,11 @@ impl Session {
                     }
                 }
                 (Some("anim"), Some(value), _) => session.animate = value == "1",
+                (Some("zoom"), Some(value), _) => {
+                    if let Ok(n) = value.parse() {
+                        session.zoom = n;
+                    }
+                }
                 (Some("pos"), Some(page), Some(file)) => {
                     if let Ok(n) = page.parse() {
                         session.positions.insert(PathBuf::from(file), n);
@@ -146,6 +154,7 @@ impl Session {
         out.push_str(&format!("para\t{}\n", self.para));
         out.push_str(&format!("theme\t{}\n", self.theme_index));
         out.push_str(&format!("anim\t{}\n", if self.animate { 1 } else { 0 }));
+        out.push_str(&format!("zoom\t{}\n", self.zoom));
         for (file, page) in &self.positions {
             out.push_str(&format!("pos\t{}\t{}\n", page, file.display()));
         }
@@ -180,6 +189,7 @@ mod tests {
             para: 1,
             theme_index: 2,
             animate: true,
+            zoom: 1.25,
             positions,
         };
 
@@ -189,6 +199,7 @@ mod tests {
         assert_eq!(restored.page_width, 64);
         assert_eq!(restored.theme_index, 2);
         assert!(restored.animate, "the animation toggle should round-trip");
+        assert_eq!(restored.zoom, 1.25, "the zoom should round-trip");
         assert_eq!(restored.positions.get(&PathBuf::from("/notes/a book.md")), Some(&12));
         assert_eq!(restored.positions.get(&PathBuf::from("/notes/other.md")), Some(&3));
     }

@@ -1,6 +1,6 @@
 # booknook
 
-**A calm, book-like reader for the terminal. Markdown and EPUB.**
+**A calm, book-like reader for markdown and EPUB.**
 
 Your notes deserve better than a scrollback buffer, and your books deserve
 better than a browser tab. booknook opens a markdown file or an EPUB as a
@@ -14,37 +14,49 @@ cargo run
 
 ## Why
 
-Every other terminal markdown viewer is a developer tool wearing a reader's
-clothes. They scroll, they syntax-highlight, they fill the window edge to
-edge, and they treat a long essay exactly the way they treat a log file.
+Most markdown viewers are developer tools wearing a reader's clothes. They
+scroll, they syntax-highlight, they fill the window edge to edge, and they
+treat a long essay exactly the way they treat a log file.
 
 booknook is built on the opposite premise. It is a reading device that
-happens to live in a terminal, and every design decision follows from that.
+happens to live in a window on your desktop, and every design decision
+follows from that.
 
 **Pages, not scrolling.** An e-ink reader flips whole pages. It never leaves
 you halfway between two of them. Neither does booknook. Every keypress moves
 a full page, or a full spread, and lands cleanly.
 
-**A book, not a wall of text.** Give it a wide terminal and it opens two
+**A book, not a wall of text.** Give it a wide window and it opens two
 pages side by side on a single sheet, with the spine drawn on the paper
 rather than as a gap between panels. Narrow the window and it becomes a
 single page, the way a phone-sized e-reader would. The decision is remade
 every frame, so resizing just works.
 
-**Typography you can feel.** booknook word-wraps the text itself instead of
-handing that job to the terminal, which is what lets it control the rhythm of
-a page: the measure of the column, the air inside a paragraph, and the larger
-gap between paragraphs. Those are three different numbers, and getting the
-relationship between them right is most of what separates a page from a
-transcript.
+**Typography you can feel.** booknook sets its body text in a real serif,
+Georgia where the system has it, at book leading, and word-wraps the text
+itself instead of handing that job to the GUI toolkit. That is what lets it
+control the rhythm of a page: the measure of the column, the leading inside
+a paragraph, and the larger gap between paragraphs. Those are three
+different numbers, and getting the relationship between them right is most
+of what separates a page from a transcript.
 
-**Ink, not syntax highlighting.** Fifteen palettes, cycled with a keypress:
-the reading-room classics the editor world already settled on, Solarized,
-Gruvbox, Catppuccin, Kanagawa, Rosé Pine, Flexoki, One Dark, Dracula, and
-Tokyo Night, alongside a genuinely light Paper, the warm cream of Kindle's
-Sepia, and a dim amber Nocturne for reading in the dark. The reading column
+**Ink, not syntax highlighting.** Six palettes, cycled with a keypress:
+Kindle's Sepia, Flexoki Light, and Paper on the light side, then Tokyo
+Night, Catppuccin Mocha, and Rosé Pine for a dark room. The reading column
 sits on its own slightly lighter shade, so the text rests on a sheet instead
-of bleeding into the terminal background.
+of bleeding into the window background.
+
+The palettes are borrowed, but the saturation is not. Those schemes were
+built for syntax highlighting, where a bright color means something: this
+token is a string, that one is a keyword. In prose it means nothing, and it
+still takes the eye. The cost is real rather than aesthetic, because the eye
+cannot focus two widely separated wavelengths at once and hunts between
+them, which is felt as distraction rather than as blur. Technical writing
+runs to about one inline-code span every twenty words, so an accent becomes
+a scattering of bright flecks through a paragraph. Here every color is held
+to a measured budget, and inline code is marked by tinting the paper behind
+it rather than by recoloring the words. Color marks structure. Inside a
+paragraph, weight and space do the work.
 
 **Keyboard only.** Real e-readers have buttons, not pointers. Mouse support
 was left out on purpose.
@@ -67,15 +79,22 @@ was left out on purpose.
 - Remembers your place. Every document reopens on the page you left it on,
   the way a Kindle returns to the book you were reading, and launching with
   no argument reopens the last file you had open
-- Automatic two-page spread on wide terminals, single page on narrow ones
+- Automatic two-page spread on wide windows, single page on narrow ones
 - Book-quality page breaks: a page never ends on a heading, never strands
   a paragraph's first line at its bottom or sends the last line alone onto
   the next page, and never cuts a table row through a wrapped cell. When
   the arithmetic break would land badly, the page ends a line or two early
   instead, the way a typesetter leaves a short page rather than a bad break
-- Live typography controls: column width, line spacing, and paragraph
-  spacing, all adjustable while reading
-- Six color themes, cycled with a single key, including Kindle-style sepia
+- Live typography controls: text size, column width, line spacing, and
+  paragraph spacing, all adjustable while reading and remembered between
+  runs
+- An optional page turn, off by default: a leaf swept across the sheet with
+  a lit edge and a soft shadow behind it, for readers who want the motion
+- Six color themes, cycled with a single key, opening on Kindle-style sepia,
+  each tuned so that color marks structure and never lands inside a sentence
+- A status bar that says where you are in the document and nothing else
+  while you read. The settings and the key legend live in the sidebar, a
+  Tab away, so that nothing at the edge of vision changes as you type
 - Correct handling of smart punctuation, so `country's` and `$78.02` render
   as words rather than as fragments with spaces wedged into them
 - Code blocks and ASCII diagrams keep their exact shape, clipped at the page
@@ -117,7 +136,9 @@ Available anywhere:
 |---|---|
 | `Tab` | Move focus: files, then contents, then the reader, then back |
 | `t` | Cycle color theme |
+| `a` | Turn the page-turn animation on or off |
 | `r` | Reload the open document from disk |
+| `Ctrl` `+` / `Ctrl` `-` | Larger or smaller text; `Ctrl` `0` resets |
 | `q` / `Esc` | Quit |
 
 In the file browser:
@@ -152,73 +173,41 @@ In the reader:
 
 ## Getting the page right
 
-booknook controls the column width, the paragraph rhythm, the margins, and
-the color. It cannot control the font, and it cannot control the space
-between two lines of glyphs. A terminal program writes characters into a
-grid, and the size and shape of that grid belong to your terminal emulator.
+In the terminal, booknook controlled the column, the paragraph rhythm, the
+margins, and the color, but the typeface and the space between lines
+belonged to the terminal emulator. In a window it sets all of them itself.
 
-This matters more than it sounds like it should. The two settings below are
-what a typesetter would call leading and tracking, and no amount of work
-inside the application can substitute for them.
+Body text is set in Georgia, which Matthew Carter drew for reading on
+screens and which ships with Windows and macOS. Where Georgia is missing,
+booknook looks for Constantia, Palatino, DejaVu Serif, Liberation Serif, and
+Noto Serif, in that order, and falls back to egui's built-in sans if it
+finds none of them. Code is set in Hack, which egui bundles, so it looks the
+same everywhere.
 
-**Windows Terminal.** Add a `font` block to your profile:
+Leading is where most of the comfort comes from. Legibility research puts
+the ideal leading for body text at roughly 1.2 to 1.45 times the type size,
+and booknook starts at 1.4. Push it much past that, toward 2.0, and the eye
+can no longer make the return sweep to the start of the next line reliably.
+It overshoots, has to re-fixate, and the rhythm that lets you read without
+noticing you are reading breaks down. That is the loose, hard-to-focus
+feeling of over-spaced text. The gap between paragraphs is a separate and
+larger step, and it is what your eye actually uses to tell one block from
+the next.
 
-```json
-"font": {
-    "face": "Cascadia Mono",
-    "size": 13,
-    "cellHeight": "1.45",
-    "cellWidth": "1.05"
-},
-"padding": "28, 16, 28, 12",
-"antialiasingMode": "grayscale"
-```
-
-**Ghostty.** In `~/.config/ghostty/config`:
-
-```
-font-family = IBM Plex Mono
-font-size = 14
-adjust-cell-height = 45%
-adjust-cell-width = 4%
-window-padding-x = 24
-window-padding-y = 14
-window-padding-balance = true
-```
-
-booknook now starts with line spacing `0` and paragraph spacing `1`, which is
-where you want it. The reason is worth stating, because it is the single
-biggest thing separating comfortable reading from tiring reading. Legibility
-research puts the ideal leading for body text at roughly 1.2 to 1.45 times the
-type size. A terminal cell already carries whatever leading your emulator is
-set to, so a single-spaced paragraph sits right in that band. Insert a blank
-row between every line and the leading jumps past 2.0, and at that point the
-eye can no longer make the return sweep to the start of the next line
-reliably. It overshoots, has to re-fixate, and the rhythm that lets you read
-without noticing you are reading breaks down. That is the loose, hard-to-focus
-feeling of over-spaced text. So the terminal supplies the leading, and
-booknook supplies only the larger gap between paragraphs, which is what your
-eye actually uses to tell one block from the next.
-
-If your terminal is not doing the leading and the lines feel cramped, press
-`]` to add a blank row back. And if you prefer more air, it is one keystroke
-away. The default is the recommendation, not a lock.
-
-For the typeface itself, prefer a humanist monospace designed with reading in
-mind over one designed for telling `l` from `1` at eight points. IBM Plex
-Mono, iA Writer Duospace, and Recursive Mono Casual are all free and all read
-like books. JetBrains Mono is a good, widely available second choice. Avoid
-fonts with programming ligatures, which are a distraction in prose.
+If you prefer more air, it is one keystroke away: `]` opens up the leading
+and `}` the gap between paragraphs. Text size follows `Ctrl` with `+` and
+`-`, the way a browser zooms, and `Ctrl` `0` puts it back. All of these are
+remembered between runs. The defaults are the recommendation, not a lock.
 
 ## Built with
 
-pulldown-cmark for parsing, ratatui and crossterm for the terminal, and a
-hand-rolled word-wrapper in between. No async, no unsafe, roughly a thousand
-lines of Rust.
+pulldown-cmark and quick-xml for parsing, egui and eframe for the window,
+and a hand-rolled word-wrapper and paginator in between. No async, no
+unsafe, about five thousand lines of Rust.
 
 If you want to know how the pieces fit together, or you are learning Rust and
 want a small real codebase to read, see [docs/architecture.md](docs/architecture.md).
-It covers the parse-then-wrap-then-render pipeline, why pages are stored as
+It covers the parse-then-wrap-then-paint pipeline, why pages are stored as
 numbers rather than scroll offsets, and how ownership and borrowing show up
 as concrete decisions throughout.
 

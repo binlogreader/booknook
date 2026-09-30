@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ratatui = { version = "0.29", features = ["unstable-rendered-line-info"] }
-crossterm = "0.29"
+# The OpenGL renderer rather than eframe's default, wgpu. A reading window has
+# no use for a modern GPU pipeline, and glow leaves a few dozen crates out of
+# the build and a few hundred megabytes out of memory at rest.
+eframe = { version = "0.35.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 pulldown-cmark = "0.12"
 anyhow = "1.0"
 unicode-width = "0.2"

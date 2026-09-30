@@ -1,6 +1,6 @@
 # What is booknook?
 
-booknook is a terminal reader for markdown and EPUB. It lays a document out
+booknook is a desktop reader for markdown and EPUB. It lays a document out
 as book pages, with a spine, margins, and a table of contents, and it turns
 pages instead of scrolling. It exists because two everyday reading
 situations are much worse than they need to be.
@@ -71,4 +71,4 @@ booknook <PR or gist URL>       # read a doc out of a PR
 ```
 
 Space or `→` turns the page, `Tab` toggles the sidebar, `t` cycles the
-fifteen themes. The full key table is in the [README](../README.md).
+six themes. The full key table is in the [README](../README.md).

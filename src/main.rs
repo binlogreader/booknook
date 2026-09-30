@@ -1,4 +1,4 @@
-//! booknook: a calm, book-like markdown reader for the terminal.
+//! booknook: a calm, book-like reader for markdown and EPUB.
 //!
 //! See `docs/architecture.md` for how the pieces below fit together.
 
@@ -12,46 +12,34 @@ mod gist;
 mod markdown;
 mod pr;
 mod session;
+mod text;
 mod theme;
+mod typeset;
 mod ui;
 mod wrap;
 
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use ratatui::layout::Rect;
-use ratatui::DefaultTerminal;
 
-use app::{App, Focus};
-use events::handle_events;
+use app::App;
 use session::Session;
-use ui::draw;
 
 fn main() -> Result<()> {
     let mut app = App::new();
 
     // The saved session carries the typography, theme, and remembered pages
     // from last time. Applying it before opening anything means the first
-    // document already loads at its remembered page and settings.
+    // document already loads at its remembered page and settings. A document
+    // that cannot be fetched or read fails here, in the terminal it was asked
+    // for from, before any window opens.
     let session = Session::load();
     app.apply_session(&session);
     open_initial(&mut app, &session)?;
 
-    // ratatui::init() enables raw mode and the alternate screen, and
-    // installs a panic hook that restores the terminal if the app
-    // crashes. restore() undoes it.
-    let mut terminal = ratatui::init();
-    let result = run(&mut terminal, &mut app);
-    ratatui::restore();
-
-    // Write the session back out before returning, so quitting from any
-    // page saves it. The current page is folded in first, then the whole
-    // state is handed to `session::save`. A failure to save is deliberately
-    // ignored: it must not mask the program's real exit status.
-    app.remember_position();
-    let _ = app.to_session().save();
-
-    result
+    // The window writes the session back out as it closes, however it is
+    // closed, so quitting from any page saves it.
+    ui::run(app)
 }
 
 /// Decide what to show on launch. An explicit argument always wins: a gist or
@@ -109,42 +97,6 @@ fn open_initial(app: &mut App, session: &Session) -> Result<()> {
             }
             _ => app.enter_dir(std::env::current_dir()?),
         },
-    }
-    Ok(())
-}
-
-fn run(terminal: &mut DefaultTerminal, app: &mut App) -> Result<()> {
-    while !app.quit {
-        app.page_turn = false;
-
-        // When a slide might follow, the frame is captured as it is drawn so
-        // it can serve as the "before" image the new page slides in over.
-        // Capturing costs a buffer clone, so it is skipped unless animation is
-        // on and the reader has focus, the only case a turn can animate.
-        let capturing = app.animate && matches!(app.focus, Focus::Document);
-        let mut before = None;
-        let mut area = Rect::default();
-        terminal.draw(|frame| {
-            draw(frame, app);
-            if capturing {
-                area = frame.area();
-                before = Some(frame.buffer_mut().clone());
-            }
-        })?;
-
-        let from_page = app.page;
-        handle_events(app)?;
-
-        // A turn key was pressed with animation on and a frame to slide from.
-        // Fold in any keys already queued behind it, then slide from the old
-        // page to wherever those turns landed.
-        if app.page_turn {
-            if let Some(before) = before {
-                events::coalesce_turns(app)?;
-                let dir = if app.page >= from_page { anim::Direction::Forward } else { anim::Direction::Back };
-                anim::turn(terminal, app, before, area, dir)?;
-            }
-        }
     }
     Ok(())
 }
