@@ -5,13 +5,14 @@
 //! terminal emulator. In a window both are booknook's to set, and this
 //! module is where that happens.
 //!
-//! Body text is set in a serif found on the machine. Georgia comes first:
-//! Matthew Carter drew it in 1993 specifically for reading on screens, it
-//! ships with Windows and macOS, and it has real bold and italic cuts, which
-//! egui cannot synthesize. On a system without it the search moves down a
-//! short list of other reading serifs, and failing all of them it settles on
-//! egui's built-in sans, with slanted rather than true italics. Code is set
-//! in egui's bundled Hack, which is the same everywhere.
+//! Body text is set in Helvetica, or the nearest thing to it on the machine,
+//! the way Kindle offers it: a plain neo-grotesque sans with an even color on
+//! the page. Few systems carry Helvetica itself, so the search moves down a
+//! short list of faces drawn to its measure, Arial first, since it ships with
+//! Windows and macOS. Each has real bold and italic cuts, which egui cannot
+//! synthesize. Failing all of them it settles on egui's built-in sans, with
+//! slanted rather than true italics. Code is set in egui's bundled Hack,
+//! which is the same everywhere.
 //!
 //! Sizes are in points before zoom. Ctrl with plus or minus scales the
 //! whole window, the way a browser does, and the page reflows to match.
@@ -34,33 +35,37 @@ pub(crate) const BODY: f32 = 19.0;
 /// same face, so they recede without looking like a different program.
 pub(crate) const CHROME: f32 = 15.0;
 
-/// The four serif families booknook registers with egui, in the order the
+/// The four text families booknook registers with egui, in the order the
 /// `Typesetter` indexes them: regular, bold, italic, bold italic.
-const SERIF: [&str; 4] = ["serif", "serif-bold", "serif-italic", "serif-bold-italic"];
+const FAMILIES: [&str; 4] = ["text", "text-bold", "text-italic", "text-bold-italic"];
 
-/// Reading serifs, best first, as the file names of their regular, bold,
-/// italic, and bold italic faces. The first whose regular face exists in any
-/// font directory wins. Georgia appears twice because Windows and macOS name
-/// its files differently.
-const SERIFS: &[[&str; 4]] = &[
-    ["georgia.ttf", "georgiab.ttf", "georgiai.ttf", "georgiaz.ttf"],
-    ["Georgia.ttf", "Georgia Bold.ttf", "Georgia Italic.ttf", "Georgia Bold Italic.ttf"],
-    // Constantia and Palatino, the other two Windows serifs drawn for
-    // continuous reading.
-    ["constan.ttf", "constanb.ttf", "constani.ttf", "constanz.ttf"],
-    ["pala.ttf", "palab.ttf", "palai.ttf", "palabi.ttf"],
-    // The serifs most Linux distributions carry.
-    ["DejaVuSerif.ttf", "DejaVuSerif-Bold.ttf", "DejaVuSerif-Italic.ttf", "DejaVuSerif-BoldItalic.ttf"],
+/// Helvetica and the faces drawn to its measure, best first, as the file
+/// names of their regular, bold, italic, and bold italic cuts. The first
+/// whose regular cut exists in any font directory wins.
+const FACES: &[[&str; 4]] = &[
+    // Helvetica itself, where someone has installed it.
+    ["Helvetica.ttf", "Helvetica-Bold.ttf", "Helvetica-Oblique.ttf", "Helvetica-BoldOblique.ttf"],
+    // Arial, drawn in 1982 to Helvetica's exact widths. It ships with
+    // Windows and macOS, which name its files differently.
+    ["arial.ttf", "arialbd.ttf", "ariali.ttf", "arialbi.ttf"],
+    ["Arial.ttf", "Arial Bold.ttf", "Arial Italic.ttf", "Arial Bold Italic.ttf"],
+    // The free Helvetica clones Linux distributions carry.
+    ["NimbusSans-Regular.otf", "NimbusSans-Bold.otf", "NimbusSans-Italic.otf", "NimbusSans-BoldItalic.otf"],
     [
-        "LiberationSerif-Regular.ttf",
-        "LiberationSerif-Bold.ttf",
-        "LiberationSerif-Italic.ttf",
-        "LiberationSerif-BoldItalic.ttf",
+        "texgyreheros-regular.otf",
+        "texgyreheros-bold.otf",
+        "texgyreheros-italic.otf",
+        "texgyreheros-bolditalic.otf",
     ],
-    ["NotoSerif-Regular.ttf", "NotoSerif-Bold.ttf", "NotoSerif-Italic.ttf", "NotoSerif-BoldItalic.ttf"],
+    [
+        "LiberationSans-Regular.ttf",
+        "LiberationSans-Bold.ttf",
+        "LiberationSans-Italic.ttf",
+        "LiberationSans-BoldItalic.ttf",
+    ],
 ];
 
-/// Which of the serif's cuts were actually found. A missing italic is
+/// Which of the face's cuts were actually found. A missing italic is
 /// slanted by egui instead; a missing bold falls back to regular, since egui
 /// has no way to embolden a face.
 #[derive(Clone, Copy, Default, Debug)]
@@ -68,9 +73,9 @@ pub(crate) struct Faces {
     pub(crate) italic: bool,
 }
 
-/// Find a serif, register it with egui behind the built-in fonts' glyph
-/// coverage, and report which cuts it has. The new fonts take effect at the
-/// start of the next frame.
+/// Find the text face, register it with egui behind the built-in fonts'
+/// glyph coverage, and report which cuts it has. The new fonts take effect
+/// at the start of the next frame.
 pub(crate) fn install(ctx: &egui::Context) -> Faces {
     let (definitions, faces) = definitions();
     ctx.set_fonts(definitions);
@@ -81,19 +86,19 @@ fn definitions() -> (FontDefinitions, Faces) {
     let mut defs = FontDefinitions::default();
 
     let mut names: [Option<String>; 4] = Default::default();
-    if let Some(files) = find_serif() {
+    if let Some(files) = find_face() {
         for (i, file) in files.into_iter().enumerate() {
             if let Some(bytes) = file.and_then(|path| std::fs::read(path).ok()) {
-                let name = format!("booknook-{}", SERIF[i]);
+                let name = format!("booknook-{}", FAMILIES[i]);
                 defs.font_data.insert(name.clone(), Arc::new(FontData::from_owned(bytes)));
                 names[i] = Some(name);
             }
         }
     }
 
-    // egui's own proportional chain stays behind the serif, so a glyph the
-    // serif lacks, a box-drawing line or an emoji, still renders. Hack goes
-    // second, for the symbols the sans lacks.
+    // egui's own proportional chain stays behind the face, so a glyph it
+    // lacks, a box-drawing line or an emoji, still renders. Hack goes
+    // second, for the symbols egui's sans lacks.
     let mut fallback = defs.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
     fallback.insert(fallback.len().min(1), "Hack".to_owned());
 
@@ -103,21 +108,22 @@ fn definitions() -> (FontDefinitions, Faces) {
     for (i, order) in preference.iter().enumerate() {
         let mut chain: Vec<String> = order.iter().find_map(|&j| names[j].clone()).into_iter().collect();
         chain.extend(fallback.iter().cloned());
-        defs.families.insert(FontFamily::Name(SERIF[i].into()), chain);
+        defs.families.insert(FontFamily::Name(FAMILIES[i].into()), chain);
     }
-    // egui's own widgets, the sidebar's lists among them, read in the serif.
-    if let Some(regular) = defs.families.get(&FontFamily::Name(SERIF[0].into())).cloned() {
+    // egui's own widgets, the sidebar's lists among them, read in the same
+    // face as the page.
+    if let Some(regular) = defs.families.get(&FontFamily::Name(FAMILIES[0].into())).cloned() {
         defs.families.insert(FontFamily::Proportional, regular);
     }
 
     (defs, Faces { italic: names[2].is_some() })
 }
 
-/// The first reading serif found on disk, as paths to its four cuts. A cut
-/// that is missing comes back as `None`.
-fn find_serif() -> Option<[Option<PathBuf>; 4]> {
+/// The first face from `FACES` found on disk, as paths to its four cuts. A
+/// cut that is missing comes back as `None`.
+fn find_face() -> Option<[Option<PathBuf>; 4]> {
     let dirs = font_dirs();
-    for family in SERIFS {
+    for family in FACES {
         for dir in &dirs {
             if dir.join(family[0]).is_file() {
                 return Some(family.map(|file| Some(dir.join(file)).filter(|path| path.is_file())));
@@ -146,13 +152,12 @@ fn font_dirs() -> Vec<PathBuf> {
     for dir in [
         "/System/Library/Fonts/Supplemental",
         "/Library/Fonts",
-        "/usr/share/fonts/truetype/dejavu",
-        "/usr/share/fonts/dejavu",
+        "/usr/share/fonts/urw-base35",
+        "/usr/share/fonts/opentype/urw-base35",
+        "/usr/share/fonts/opentype/texgyre",
         "/usr/share/fonts/TTF",
         "/usr/share/fonts/truetype/liberation",
-        "/usr/share/fonts/liberation",
-        "/usr/share/fonts/truetype/noto",
-        "/usr/share/fonts/noto",
+        "/usr/share/fonts/liberation-sans",
     ] {
         found.push(PathBuf::from(dir));
     }
@@ -179,7 +184,7 @@ impl Typesetter {
     pub(crate) fn new(faces: Faces, spacing: Spacing) -> Self {
         Typesetter {
             faces,
-            families: SERIF.map(|name| FontFamily::Name(name.into())),
+            families: FAMILIES.map(|name| FontFamily::Name(name.into())),
             leading: 1.4 + 0.15 * spacing.line as f32,
             gap: 0.8 * BODY * spacing.paragraph as f32,
         }
@@ -187,7 +192,7 @@ impl Typesetter {
 
     /// The size `style` is set at. Headings step up by level. Code steps
     /// down, because a monospace face at the same nominal size looks larger
-    /// than the serif around it.
+    /// than the text around it.
     pub(crate) fn size(&self, style: Style) -> f32 {
         let heading = match style.heading {
             1 => 1.55,
@@ -218,7 +223,7 @@ impl Typesetter {
         BODY * self.leading
     }
 
-    /// The serif at `size`, for chrome: the sidebar, the status bar, and
+    /// The text face at `size`, for chrome: the sidebar, the status bar, and
     /// the hint shown when nothing is open.
     pub(crate) fn chrome(&self, size: f32, bold: bool, italic: bool) -> FontId {
         FontId::new(size, self.families[usize::from(bold) | usize::from(italic) << 1].clone())

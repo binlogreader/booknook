@@ -121,9 +121,9 @@ is what turns a heading's block index into a page. The tests implement
 can be checked by counting, with no window involved.
 
 **`typeset`** decides how a `Style` looks on the page. At startup it looks
-for a reading serif on disk, Georgia first, and registers it with egui along
-with its bold and italic cuts, behind egui's built-in fonts so any glyph the
-serif lacks still renders. Each frame it builds a `Typesetter` from the
+for Helvetica on disk, or the nearest face drawn to its measure, Arial on
+most machines, and registers it with egui along with its bold and italic
+cuts, behind egui's built-in fonts so any glyph it lacks still renders. Each frame it builds a `Typesetter` from the
 spacing settings, which maps a style to an egui font and text format and
 implements `wrap::Measure` against egui's glyph widths. It depends on
 `text`, `theme`, and `wrap`.

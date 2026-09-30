@@ -32,8 +32,9 @@ rather than as a gap between panels. Narrow the window and it becomes a
 single page, the way a phone-sized e-reader would. The decision is remade
 every frame, so resizing just works.
 
-**Typography you can feel.** booknook sets its body text in a real serif,
-Georgia where the system has it, at book leading, and word-wraps the text
+**Typography you can feel.** booknook sets its body text in Helvetica, the
+way Kindle offers it, or in Arial where Helvetica is not installed, at book
+leading, and word-wraps the text
 itself instead of handing that job to the GUI toolkit. That is what lets it
 control the rhythm of a page: the measure of the column, the leading inside
 a paragraph, and the larger gap between paragraphs. Those are three
@@ -177,12 +178,13 @@ In the terminal, booknook controlled the column, the paragraph rhythm, the
 margins, and the color, but the typeface and the space between lines
 belonged to the terminal emulator. In a window it sets all of them itself.
 
-Body text is set in Georgia, which Matthew Carter drew for reading on
-screens and which ships with Windows and macOS. Where Georgia is missing,
-booknook looks for Constantia, Palatino, DejaVu Serif, Liberation Serif, and
-Noto Serif, in that order, and falls back to egui's built-in sans if it
-finds none of them. Code is set in Hack, which egui bundles, so it looks the
-same everywhere.
+Body text is set in Helvetica, the plain sans Kindle offers among its
+fonts, which keeps an even color across the page. Few machines have
+Helvetica itself, so booknook falls back to faces drawn to its measure:
+Arial, which was cut to Helvetica's exact widths and ships with Windows and
+macOS, and then Nimbus Sans, TeX Gyre Heros, and Liberation Sans on Linux.
+If it finds none of them it uses egui's built-in sans. Code is set in Hack,
+which egui bundles, so it looks the same everywhere.
 
 Leading is where most of the comfort comes from. Legibility research puts
 the ideal leading for body text at roughly 1.2 to 1.45 times the type size,
